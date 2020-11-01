@@ -81,6 +81,14 @@ very small max receptive Field:
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 2
 ```
+#### Frequency aware CP_ResNet
+
+```
+CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_faresnet
+
+```
+
+
 # Loading pretrained models
 (DCASE20 models will be added soon)
 Download the evaluation set:

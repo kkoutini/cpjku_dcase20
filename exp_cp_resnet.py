@@ -11,12 +11,19 @@ import json
 from trainer import Trainer
 import utils_funcs
 import traceback
+import importlib
+available_models = [m[:-3] for m  in os.listdir("models") if m.startswith("cp_")]
+
 
 parser = argparse.ArgumentParser(description='CP_ResNet Training')
 # Optimization options
 
 parser.add_argument('--dataset', default="dcase2020b.json", type=str, 
                     help='dataset JSON configuration to load from `configs/datasets/` default is dcase2020b.json')
+
+parser.add_argument('--arch', default="cp_resnet", type=str, 
+                    choices=available_models,
+                    help='The CNN architecture, one from the files located in `models/`')
 
 # rho value control the MAX RF of the Network values from 5-9 corresponds max rf similar to the popular VGG-like CNNs.
 parser.add_argument('--rho', default=5, type=int,
@@ -58,9 +65,9 @@ print("The experiment tesnorboard can be accessed: tensorboard --logdir  ", tens
 print("Rho value : ", args.rho)
 print("Use Mix-up : ", args.mixup)
 
-from models.cp_resnet import get_model_based_on_rho
+arch = importlib.import_module('models.{}'.format(args.arch))
 
-default_conf['model_config'] = get_model_based_on_rho(args.rho, config_only=True)
+default_conf['model_config'] = arch.get_model_based_on_rho(args.rho, config_only=True)
 
 
 # find the RF at the 24th layer of the model defined by this config
