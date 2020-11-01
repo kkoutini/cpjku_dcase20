@@ -81,10 +81,17 @@ very small max receptive Field:
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 2
 ```
-#### Frequency aware CP_ResNet
+#### Using differnet architectures
+The argument ```--arch``` allows changing the CNN architecture, the possible architectures are st
+For example [Frequency aware CP_ResNet](https://arxiv.org/abs/1909.02859) : 
 
 ```
-CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_faresnet
+CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_faresnet  --rho 5
+
+```
+[Frequency-Damped](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf) CP_ResNet:
+```
+CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_resnet_freq_damp  --rho 7
 
 ```
 
