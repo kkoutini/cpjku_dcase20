@@ -101,9 +101,9 @@ This repo is used to publish for our submission to DCASE 2019 and MediaEval 2019
 # Citation
 
 
-# Citation
-[The Receptive Field as a Regularizer ]( https://arxiv.org/abs/1907.01803 ),  [Receptive-Field-Regularized CNN Variants for Acoustic Scene Classification](https://arxiv.org/abs/1909.02859)
- [Low-Complexity Models for Acoustic Scene Classification Based on Receptive Field Regularization and Frequency Damping](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf)
+[The Receptive Field as a Regularizer ]( https://arxiv.org/abs/1907.01803 ), 
+[Receptive-Field-Regularized CNN Variants for Acoustic Scene Classification](https://arxiv.org/abs/1909.02859), 
+[Low-Complexity Models for Acoustic Scene Classification Based on Receptive Field Regularization and Frequency Damping](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf)
 
 ```
 @INPROCEEDINGS{Koutini2019Receptive,
