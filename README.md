@@ -66,8 +66,7 @@ After installing dependencies:
  The exact commmand is printed when you run the experiment script.
 
 ## Example runs
-### DCASE 2020 DCASE 1b
-#### CP_ResNet
+### CP_ResNet (DCASE 2020 DCASE 1b)
 default adapted receptive field RN1,RN1 (in Koutini2019Receptive below):
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py 
@@ -81,8 +80,10 @@ very small max receptive Field:
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 2
 ```
-#### Using differnet architectures
-The argument ```--arch``` allows changing the CNN architecture, the possible architectures are st
+### Using differnet architectures
+The argument ```--arch``` allows changing the CNN architecture, the possible architectures are stored in ```models/```.
+
+
 For example [Frequency aware CP_ResNet](https://arxiv.org/abs/1909.02859) : 
 
 ```
