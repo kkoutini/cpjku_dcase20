@@ -102,11 +102,6 @@ layer_index_total = 0
 
 
 def initialize_weights_fixup(module):
-    if isinstance(module, AttentionAvg):
-        print("AttentionAvg init..")
-        module.forw_conv[0].weight.data.zero_()
-        module.atten[0].bias.data.zero_()
-        nn.init.kaiming_normal_(module.atten[0].weight.data, mode='fan_in', nonlinearity="sigmoid")
     if isinstance(module, BasicBlock):
         # He init, rescaled by Fixup multiplier
         b = module
@@ -138,41 +133,6 @@ def calc_padding(kernal):
     except TypeError:
         return [k // 3 for k in kernal]
 
-
-class AttentionAvg(nn.Module):
-
-    def __init__(self, in_channels, out_channels, sum_all=True):
-        super(AttentionAvg, self).__init__()
-        self.sum_dims = [2, 3]
-        if sum_all:
-            self.sum_dims = [1, 2, 3]
-        self.forw_conv = nn.Sequential(
-            Conv2dDamped(
-                in_channels,
-                out_channels,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias=False),
-            nn.BatchNorm2d(out_channels)
-        )
-        self.atten = nn.Sequential(
-            Conv2dDamped(
-                in_channels,
-                out_channels,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias=True),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        a1 = self.forw_conv(x)
-        atten = self.atten(x)
-        num = atten.size(2) * atten.size(3)
-        asum = atten.sum(dim=self.sum_dims, keepdim=True) + 1e-8
-        return a1 * atten * num / asum
 
 
 class BasicBlock(nn.Module):
@@ -405,11 +365,11 @@ class Network(nn.Module):
 
 
 
-def get_model_based_on_rho(rho, config_only=False):
+def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
     # extra receptive checking
     extra_kernal_rf = rho - 7
     model_config = {
-        "arch": "cp_faresnet",
+        "arch": arch,
         "base_channels": 128,
         "block_type": "basic",
         "depth": 26,

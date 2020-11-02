@@ -36,9 +36,17 @@ parser.add_argument('--epochs', default=400, type=int, metavar='N',
 parser.add_argument('--mixup', default=1, type=int,
                     help='use mixup if 1. ')
 
+
+# model args
+# Optimization options
+parser.add_argument('--decomp_factor', default=4, type=int, 
+                    help='decomposition factor, used for all decomposed convolution layers. Needs the --arch to be cp_resnet_decomp or cp_resnet_decomp_freq_damp.\
+                    if the architecture is not decomposed, this argument will be silently ignored.')
+
 # pre-trained models config
 parser.add_argument('--load', default=None, type=str,
                     help='the pre-trained model path to load, in this case the model is only evaluated')
+
 
 args = parser.parse_args()
 if args.load is  None:
@@ -47,6 +55,10 @@ if args.load is  None:
 else:
     with open("configs/cp_resnet_eval.json", "r") as text_file:
         default_conf = json.load(text_file)
+
+
+model_kwargs = {"decomp_factor": args.decomp_factor,}
+
 
 
 # overriding the database config 
@@ -67,7 +79,7 @@ print("Use Mix-up : ", args.mixup)
 
 arch = importlib.import_module('models.{}'.format(args.arch))
 
-default_conf['model_config'] = arch.get_model_based_on_rho(args.rho, config_only=True)
+default_conf['model_config'] = arch.get_model_based_on_rho(args.rho, args.arch, config_only=True)
 
 
 # find the RF at the 24th layer of the model defined by this config

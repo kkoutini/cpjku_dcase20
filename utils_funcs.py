@@ -37,3 +37,13 @@ def update_dict(d, u):
             d[k] = v
     return d
 
+
+def count_parameters(model, trainable=True):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad == trainable)
+
+def count_non_zero_params(model):
+    sum_params = 0
+    for p in model.parameters():
+        if p.requires_grad:
+            sum_params += p[p != 0].numel()
+    return sum_params

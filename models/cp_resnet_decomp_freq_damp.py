@@ -9,6 +9,88 @@ from torch.utils.checkpoint import checkpoint_sequential
 import shared_globals
 from librosa.filters import mel as librosa_mel_fn
 
+from torch._six import container_abcs
+from torch.nn.modules.conv import _ConvNd
+from torch.utils.checkpoint import checkpoint_sequential
+import numpy as np
+import shared_globals
+from librosa.filters import mel as librosa_mel_fn
+
+from itertools import repeat
+
+
+def _ntuple(n):
+    def parse(x):
+        if isinstance(x, container_abcs.Iterable):
+            return x
+        return tuple(repeat(x, n))
+
+    return parse
+
+
+_single = _ntuple(1)
+_pair = _ntuple(2)
+_triple = _ntuple(3)
+_quadruple = _ntuple(4)
+
+apply_prune = False
+
+COMP_FACTOR = 4
+from models.cp_resnet_freq_damp import Conv2dDamped
+
+class DecompCONV(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                 padding=0, dilation=1, groups=1,
+                 bias=True):
+        super(DecompCONV, self).__init__()
+        self.kernel_size=_pair(kernel_size)
+        self.in_channels=in_channels
+        self.out_channels=out_channels
+        if COMP_FACTOR == 1:
+            print("WARNING: RANK == 1 no bottle necking")
+            self.conv2 = nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+                groups=groups,
+                bias=bias)
+            self.conv1 = nn.Sequential()
+            self.conv3 = nn.Sequential()
+            return
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            out_channels // COMP_FACTOR,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False)
+        self.conv2 = Conv2dDamped(
+            out_channels // COMP_FACTOR,
+            out_channels // COMP_FACTOR,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=False)
+        self.conv3 = nn.Conv2d(
+            out_channels // COMP_FACTOR,
+            out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=bias)
+
+    def forward(self, input):
+        return self.conv3(self.conv2(self.conv1(input)))
+
+
+cach_damp = {}
+
 
 def initialize_weights(module):
     if isinstance(module, nn.Conv2d):
@@ -25,22 +107,22 @@ layer_index_total = 0
 
 
 def initialize_weights_fixup(module):
-    # source: https://github.com/ajbrock/BoilerPlate/blob/master/Models/fixup.py
     if isinstance(module, BasicBlock):
         # He init, rescaled by Fixup multiplier
-        b = module
-        n = b.conv1.kernel_size[0] * b.conv1.kernel_size[1] * b.conv1.out_channels
-        #print(b.layer_index, math.sqrt(2. / n), layer_index_total ** (-0.5))
-        b.conv1.weight.data.normal_(0, (layer_index_total ** (-0.5)) * math.sqrt(2. / n))
-        b.conv2.weight.data.zero_()
-        if b.shortcut._modules.get('conv') is not None:
-            convShortcut = b.shortcut._modules.get('conv')
-            n = convShortcut.kernel_size[0] * convShortcut.kernel_size[1] * convShortcut.out_channels
-            convShortcut.weight.data.normal_(0, math.sqrt(2. / n))
-    if isinstance(module, nn.Conv2d):
+        # b = module
+        # n = b.conv1.kernel_size[0] * b.conv1.kernel_size[1] * b.conv1.out_channels
+        # print(b.layer_index, math.sqrt(2. / n), layer_index_total ** (-0.5))
+        # b.conv1.weight.data.normal_(0, (layer_index_total ** (-0.5)) * math.sqrt(2. / n))
+        # b.conv2.weight.data.zero_()
+        # if b.shortcut.modules.get('conv') is not None:
+        #     convShortcut = b.shortcut._modules.get('conv')
+        #     n = convShortcut.kernel_size[0] * convShortcut.kernel_size[1] * convShortcut.out_channels
+        #     convShortcut.weight.data.normal_(0, math.sqrt(2. / n))
         pass
-        # nn.init.kaiming_normal_(module.weight.data, mode='fan_in', nonlinearity="relu")
-        # nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
+    if isinstance(module, nn.Conv2d):
+
+        nn.init.kaiming_normal_(module.weight.data, mode='fan_in', nonlinearity="relu")
+        nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
     elif isinstance(module, nn.BatchNorm2d):
         module.weight.data.fill_(1)
         module.bias.data.zero_()
@@ -58,6 +140,7 @@ def calc_padding(kernal):
         return [k // 3 for k in kernal]
 
 
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -66,7 +149,7 @@ class BasicBlock(nn.Module):
         global layer_index_total
         self.layer_index = layer_index_total
         layer_index_total = layer_index_total + 1
-        self.conv1 = nn.Conv2d(
+        self.conv1 = DecompCONV(
             in_channels,
             out_channels,
             kernel_size=k1,
@@ -74,7 +157,7 @@ class BasicBlock(nn.Module):
             padding=calc_padding(k1),
             bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(
+        self.conv2 = DecompCONV(
             out_channels,
             out_channels,
             kernel_size=k2,
@@ -87,7 +170,7 @@ class BasicBlock(nn.Module):
         if in_channels != out_channels:
             self.shortcut.add_module(
                 'conv',
-                nn.Conv2d(
+                DecompCONV(
                     in_channels,
                     out_channels,
                     kernel_size=1,
@@ -108,9 +191,12 @@ class BasicBlock(nn.Module):
 class Network(nn.Module):
     def __init__(self, config):
         super(Network, self).__init__()
-
+        global COMP_FACTOR
         input_shape = config['input_shape']
         n_classes = config['n_classes']
+        COMP_FACTOR = config.get("decomp_factor", 4) or 4
+        print("\nDecomposed Frequency-Damped Conv2d with decomp_factor of ",COMP_FACTOR,"\n\n")
+
 
         base_channels = config['base_channels']
         block_type = config['block_type']
@@ -163,24 +249,41 @@ class Network(nn.Module):
         self.stage1 = self._make_stage(
             n_channels[0], n_channels[0], n_blocks_per_stage[0], block, stride=1, maxpool=config['stage1']['maxpool'],
             k1s=config['stage1']['k1s'], k2s=config['stage1']['k2s'])
-        self.stage2 = self._make_stage(
-            n_channels[0], n_channels[1], n_blocks_per_stage[1], block, stride=1, maxpool=config['stage2']['maxpool'],
-            k1s=config['stage2']['k1s'], k2s=config['stage2']['k2s'])
-        self.stage3 = self._make_stage(
-            n_channels[1], n_channels[2], n_blocks_per_stage[2], block, stride=1, maxpool=config['stage3']['maxpool'],
-            k1s=config['stage3']['k1s'], k2s=config['stage3']['k2s'])
+        if n_blocks_per_stage[1] == 0:
+            self.stage2 = nn.Sequential()
+            n_channels[1] = n_channels[0]
+            print("WARNING: stage2 removed")
+        else:
+            self.stage2 = self._make_stage(
+                n_channels[0], n_channels[1], n_blocks_per_stage[1], block, stride=1,
+                maxpool=config['stage2']['maxpool'],
+                k1s=config['stage2']['k1s'], k2s=config['stage2']['k2s'])
+        if n_blocks_per_stage[2] == 0:
+            self.stage3 = nn.Sequential()
+            n_channels[2] = n_channels[1]
+            print("WARNING: stage3 removed")
+        else:
+            self.stage3 = self._make_stage(
+                n_channels[1], n_channels[2], n_blocks_per_stage[2], block, stride=1,
+                maxpool=config['stage3']['maxpool'],
+                k1s=config['stage3']['k1s'], k2s=config['stage3']['k2s'])
 
         ff_list = []
-
-        ff_list += [nn.Conv2d(
-            n_channels[2],
-            n_classes,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            bias=False),
-            nn.BatchNorm2d(n_classes),
-        ]
+        if config.get("attention_avg"):
+            if config.get("attention_avg") == "sum_all":
+                ff_list.append(AttentionAvg(n_channels[2], n_classes, sum_all=True))
+            else:
+                ff_list.append(AttentionAvg(n_channels[2], n_classes, sum_all=False))
+        else:
+            ff_list += [nn.Conv2d(
+                n_channels[2],
+                n_classes,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                bias=False),
+                nn.BatchNorm2d(n_classes),
+            ]
 
         self.stop_before_global_avg_pooling = False
         if config.get("stop_before_global_avg_pooling"):
@@ -191,6 +294,12 @@ class Network(nn.Module):
         self.feed_forward = nn.Sequential(
             *ff_list
         )
+        # # compute conv feature size
+        # with torch.no_grad():
+        #     self.feature_size = self._forward_conv(
+        #         torch.zeros(*input_shape)).view(-1).shape[0]
+        #
+        # self.fc = nn.Linear(self.feature_size, n_classes)
 
         # initialize weights
         if config.get("weight_init") == "fixup":
@@ -201,7 +310,10 @@ class Network(nn.Module):
         else:
             self.apply(initialize_weights)
         self.use_check_point = config.get("use_check_point") or False
-
+    def half_damper(self):
+        global cach_damp
+        for k in cach_damp.keys():
+            cach_damp[k]=cach_damp[k].half()
     def _make_stage(self, in_channels, out_channels, n_blocks, block, stride, maxpool=set(), k1s=[3, 3, 3, 3, 3, 3],
                     k2s=[3, 3, 3, 3, 3, 3]):
         stage = nn.Sequential()
@@ -246,7 +358,12 @@ class Network(nn.Module):
     def forward(self, x):
         global first_RUN
         if self.use_raw_spectograms:
-            raise RuntimeError("Not supported ")
+            if first_RUN: print("raw_x:", x.size())
+            x = torch.log10(torch.sqrt((x * x).sum(dim=3)))
+            if first_RUN: print("log10_x:", x.size())
+            x = torch.matmul(self.mel_basis, x)
+            if first_RUN: print("mel_basis_x:", x.size())
+            x = x.unsqueeze(1)
         x = self._forward_conv(x)
         x = self.feed_forward(x)
         if first_RUN: print("feed_forward:", x.size())
@@ -262,11 +379,12 @@ class Network(nn.Module):
         return logit
 
 
+
 def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
     # extra receptive checking
     extra_kernal_rf = rho - 7
     model_config = {
-        "arch": "cp_resnet",
+        "arch": arch,
         "base_channels": 128,
         "block_type": "basic",
         "depth": 26,
@@ -313,10 +431,4 @@ def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
     if config_only:
         return model_config
     return Network(model_config)
-# MAIN PART
-# import json, sys
-#
-# arguments_dict = json.loads(sys.argv[1])
-#
-# print("Passed ARGS: ", arguments_dict)
 

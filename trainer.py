@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 
 from datasets import DatasetsManager
 logger = shared_globals.logger
-
+from utils_funcs import count_parameters,count_non_zero_params
 
 class Trainer:
     # Events
@@ -82,6 +82,15 @@ class Trainer:
             self.swa_n = 0
             self.swa_c_epochs = config.swa_c_epochs
             self.swa_start = config.swa_start
+
+
+        # print number of parameters
+        print("Trainable model parameters {}, non-trainable {} ".format(
+            count_parameters(self.bare_model), count_parameters(self.bare_model, False)))
+        print("Trainable model parameters non-zero {} ".format(
+            count_non_zero_params(self.bare_model)))
+
+        # move to gpu
         if self.config.use_gpu:
             self.bare_model.cuda()
 
