@@ -19,7 +19,8 @@ parser = argparse.ArgumentParser(description='CP_ResNet Training')
 # Optimization options
 
 parser.add_argument('--dataset', default="dcase2020b.json", type=str, 
-                    help='dataset JSON configuration to load from `configs/datasets/` default is dcase2020b.json')
+                    help='dataset JSON configuration to load from `configs/datasets/` default is dcase2020b.json \n\
+                    other options include dcase2019.json, dcase2018.json')
 
 parser.add_argument('--arch', default="cp_resnet", type=str, 
                     choices=available_models,

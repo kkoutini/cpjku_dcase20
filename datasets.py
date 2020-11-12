@@ -141,18 +141,26 @@ class DatasetsManager:
     def df_get_train_set(self):
 
         train_files_csv, fold = self.config.train_files_csv, self.config.fold
+        no_header = self.config.train_files_csv_parser_header== "no_header"
         global df_trset
         if df_trset is not None:
             return df_trset
-        df_trset = SelectionDataset(self.get_full_dataset(),
-                                    pd.read_csv(train_files_csv.format(fold), header=0, sep="\t")['filename'].values)
+        if no_header:
+            df_trset = SelectionDataset(self.get_full_dataset(),
+                                    pd.read_csv(train_files_csv.format(fold), header=None, sep="\t")[0].values)
+        else:
+            df_trset = SelectionDataset(self.get_full_dataset(),
+                                        pd.read_csv(train_files_csv.format(fold), header=0, sep="\t")['filename'].values)
 
         return df_trset
 
     def df_get_test_set(self):
         test_files_csv, fold = self.config.test_files_csv, self.config.fold
         totalset = self.get_full_dataset()
-
+        no_header = self.config.train_files_csv_parser_header== "no_header"
+        if no_header:
+            return SelectionDataset(totalset,
+                                pd.read_csv(test_files_csv.format(fold), header=None, sep="\t")[0].values)
         return SelectionDataset(totalset,
                                 pd.read_csv(test_files_csv.format(fold), header=0, sep="\t")['filename'].values)
 

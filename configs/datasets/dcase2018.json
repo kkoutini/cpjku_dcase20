@@ -1,0 +1,73 @@
+{
+  "audiodataset": {
+    "audio_path": "datasets/TUT-urban-acoustic-scenes-2018-development/",
+    "audio_processor": "d18_stereo",
+    "cache": true,
+    "cache_x_name": "",
+    "cv_version": null,
+    "dcace_version": null,
+    "file_cache": true,
+    "fold": 1,
+    "leaderboard_audio_path": "datasets/TAU-urban-acoustic-scenes-2018-leaderboard/",
+    "leaderboard_parser": "nolabel_csv",
+    "leaderboard_parser_args": {
+      "csv_file": "datasets/TAU-urban-acoustic-scenes-2018-leaderboard/evaluation_setup/test.csv",
+      "files_col": 0,
+      "header": 0
+    },
+    "name": "d18t1",
+    "no_resample": false,
+    "normalize": 1,
+    "num_of_classes": 10,
+    "parser": "categorical_csv",
+    "parser_args": {
+      "csv_file": "datasets/TUT-urban-acoustic-scenes-2018-development/meta.csv",
+      "files_col": 0,
+      "header": 0,
+      "labels_col": 1
+    },
+    "resize_limit": 26,
+    "resize_limit_t": 26,
+    "roll": 1,
+    "scale": false,
+    "spec_resize": false,
+    "stereo_desync": false,
+    "stereo_flip": false,
+    "sub_audio_path": "datasets/sub/TAU-urban-acoustic-scenes-2018-evaluation/",
+    "sub_parser": "nolabel_csv",
+    "sub_parser_args": {
+      "csv_file": "datasets/sub/TAU-urban-acoustic-scenes-2018-evaluation/evaluation_setup/test.csv",
+      "files_col": 0,
+      "header": 0
+    },
+    "subsample": false,
+    "test_files_csv": "datasets/TUT-urban-acoustic-scenes-2018-development/evaluation_setup/fold{}_evaluate.txt",
+    "train_files_csv": "datasets/TUT-urban-acoustic-scenes-2018-development/evaluation_setup/fold{}_train.txt",
+    "train_files_csv_parser_header": "no_header",
+    "use_as_default_scaler": false,
+    "use_raw_spectograms": false,
+    "vertical_desync": false
+  },
+  "datasets": {
+
+    "testing": {
+      "batch_config": {
+        "batch_sampler": "default",
+        "batch_size": 10
+      },
+      "dataset": "audiodataset.get_test_set",
+      "num_of_workers": 4,
+      "testing": true,
+      "training": false
+    },
+    "training": {
+      "batch_config": {
+        "batch_sampler": "default",
+        "batch_size": 10
+      },
+      "dataset": "audiodataset.get_train_set",
+      "num_of_workers": 4,
+      "training": true
+    }
+  }
+}
