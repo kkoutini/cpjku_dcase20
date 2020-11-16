@@ -1,6 +1,6 @@
 from functools import lru_cache
 import collections.abc
-
+import numpy as np
 
 model_config=None
 def getk(i):
@@ -47,3 +47,34 @@ def count_non_zero_params(model):
         if p.requires_grad:
             sum_params += p[p != 0].numel()
     return sum_params
+
+
+def linear_rampup(current, rampup_length=16):
+    if rampup_length == 0:
+        return 1.0
+    else:
+        current = np.clip(current / rampup_length, 0.0, 1.0)
+        return float(current)
+
+def sigmoid_rampup(current, rampup_length):
+    """Exponential rampup from https://arxiv.org/abs/1610.02242"""
+    if rampup_length == 0:
+        return 1.0
+    else:
+        current = np.clip(current, 0.0, rampup_length)
+        phase = 1.0 - current / rampup_length
+        return float(np.exp(-5.0 * phase * phase))
+
+
+def customsigmoid_rampup(current, rampup_length):
+    """Exponential rampup from https://arxiv.org/abs/1610.02242"""
+    current = current
+
+    if rampup_length == 0:
+        return 1.0
+    else:
+        current = np.clip(current, 0.0, rampup_length)
+        phase = 1.0 - current / rampup_length
+        return float(np.exp(-1 * (phase ** 3)))
+
+

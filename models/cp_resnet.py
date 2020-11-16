@@ -8,6 +8,7 @@ from torch.utils.checkpoint import checkpoint_sequential
 
 import shared_globals
 from librosa.filters import mel as librosa_mel_fn
+from utils_funcs import update_dict
 
 
 def initialize_weights(module):
@@ -262,11 +263,12 @@ class Network(nn.Module):
         return logit
 
 
-def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
+
+def get_model_based_on_rho(rho, arch, config_only=False, model_config_overrides={}):
     # extra receptive checking
     extra_kernal_rf = rho - 7
     model_config = {
-        "arch": "cp_resnet",
+        "arch": arch,
         "base_channels": 128,
         "block_type": "basic",
         "depth": 26,
@@ -310,9 +312,13 @@ def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
         "use_bn": True,
         "weight_init": "fixup"
     }
+    # override model_config 
+    model_config=update_dict(model_config, model_config_overrides)
     if config_only:
         return model_config
     return Network(model_config)
+
+
 # MAIN PART
 # import json, sys
 #

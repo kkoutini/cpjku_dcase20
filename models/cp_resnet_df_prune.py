@@ -4,11 +4,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint_sequential
-
-import shared_globals
-from librosa.filters import mel as librosa_mel_fn
-
 from torch._six import container_abcs
 from torch.nn.modules.conv import _ConvNd
 from torch.utils.checkpoint import checkpoint_sequential
@@ -36,66 +31,83 @@ _quadruple = _ntuple(4)
 
 apply_prune = False
 
-COMP_FACTOR = 4
 
-
-class DecompCONV(nn.Module):
+class Conv2dPrune(_ConvNd):
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1,
                  bias=True):
-        super(DecompCONV, self).__init__()
-        self.kernel_size=_pair(kernel_size)
-        self.in_channels=in_channels
-        self.out_channels=out_channels
-        if COMP_FACTOR == 1:
-            print("WARNING: RANK == 1 no bottle necking")
-            self.conv2 = nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=groups,
-                bias=bias)
-            self.conv1 = nn.Sequential()
-            self.conv3 = nn.Sequential()
-            return
-        self.conv1 = nn.Conv2d(
-            in_channels,
-            out_channels // COMP_FACTOR,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            bias=False)
-        self.conv2 = nn.Conv2d(
-            out_channels // COMP_FACTOR,
-            out_channels // COMP_FACTOR,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            groups=groups,
-            bias=False)
-        self.conv3 = nn.Conv2d(
-            out_channels // COMP_FACTOR,
-            out_channels,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            bias=bias)
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
+        dilation = _pair(dilation)
+        print("damped prune ", kernel_size)
+        try:
+            super(Conv2dPrune, self).__init__(
+                in_channels, out_channels, kernel_size, stride, padding, dilation,
+                False, _pair(0), groups, bias)
+        except:
+            super(Conv2dPrune, self).__init__(
+                in_channels, out_channels, kernel_size, stride, padding, dilation,
+                False, _pair(0), groups, bias, padding_mode='zeros')
+        prune_mask = torch.ones_like(self.weight)
+        prune_mask.requires_grad = False
+        self.register_buffer('prune_mask', prune_mask)
+
+    def update_prune_by_threshold(self, threshold):
+        self.prune_mask.fill_(1.)
+        self.prune_mask[self.weight.abs() < threshold] = 0
+
+    def update_prune_by_percentage(self, pecentage):
+        k = 1 + round(float(pecentage) * (self.weight.numel() - 1))
+        threshold = self.weight.view(-1).abs().kthvalue(k).values.item()
+        self.update_prune_by_threshold(threshold)
+
+    def copy_prune_to_weight(self):
+        self.weight.mul_(self.prune_mask)
+
+    def conv2d_forward(self, input, weight):
+        damper = get_damper(weight)
+        # print(damper)
+        if apply_prune:
+            return F.conv2d(input, weight * self.prune_mask * damper, self.bias, self.stride,
+                            self.padding, self.dilation, self.groups)
+        else:
+            return F.conv2d(input, weight * damper, self.bias, self.stride,
+                            self.padding, self.dilation, self.groups)
 
     def forward(self, input):
-        return self.conv3(self.conv2(self.conv1(input)))
+        return self.conv2d_forward(input, self.weight)
 
 
 cach_damp = {}
 
 
+def get_damper(w):
+    k = (w.shape[2], w.shape[3])
+    if cach_damp.get(k) is None:
+        t = torch.ones_like(w[0, 0]).reshape(1, 1, w.shape[2], w.shape[3])
+        center2 = (w.shape[2] - 1.) / 2
+        center3 = (w.shape[3] - 1.) / 2
+        minscale = 0.1
+        if center2 >= 1:
+            for i in range(w.shape[2]):
+                distance = np.abs(i - center2)
+                sacale = -(1 - minscale) * distance / center2 + 1.
+                t[:, :, i, :] *= sacale
+        # if center2 >= 1:
+        #     for i in range(w.shape[3]):
+        #         distance = np.abs(i - center3)
+        #         sacale = -(1 - minscale) * distance/center3 + 1.
+        #         t[:, :, :, i] *= sacale
+        cach_damp[k] = t.detach()
+    return cach_damp.get(k)
+
+
 def initialize_weights(module):
-    if isinstance(module, nn.Conv2d):
+    if isinstance(module, Conv2dPrune):
         nn.init.kaiming_normal_(module.weight.data, mode='fan_in', nonlinearity="relu")
+
         # nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
     elif isinstance(module, nn.BatchNorm2d):
         module.weight.data.fill_(1)
@@ -108,22 +120,26 @@ layer_index_total = 0
 
 
 def initialize_weights_fixup(module):
+    # if isinstance(module, AttentionAvg):
+    #     print("AttentionAvg init..")
+    #     module.forw_conv[0].weight.data.zero_()
+    #     module.atten[0].bias.data.zero_()
+    #     nn.init.kaiming_normal_(module.atten[0].weight.data, mode='fan_in', nonlinearity="sigmoid")
     if isinstance(module, BasicBlock):
         # He init, rescaled by Fixup multiplier
-        # b = module
-        # n = b.conv1.kernel_size[0] * b.conv1.kernel_size[1] * b.conv1.out_channels
-        # print(b.layer_index, math.sqrt(2. / n), layer_index_total ** (-0.5))
-        # b.conv1.weight.data.normal_(0, (layer_index_total ** (-0.5)) * math.sqrt(2. / n))
-        # b.conv2.weight.data.zero_()
-        # if b.shortcut.modules.get('conv') is not None:
-        #     convShortcut = b.shortcut._modules.get('conv')
-        #     n = convShortcut.kernel_size[0] * convShortcut.kernel_size[1] * convShortcut.out_channels
-        #     convShortcut.weight.data.normal_(0, math.sqrt(2. / n))
+        b = module
+        n = b.conv1.kernel_size[0] * b.conv1.kernel_size[1] * b.conv1.out_channels
+        print(b.layer_index, math.sqrt(2. / n), layer_index_total ** (-0.5))
+        b.conv1.weight.data.normal_(0, (layer_index_total ** (-0.5)) * math.sqrt(2. / n))
+        b.conv2.weight.data.zero_()
+        if b.shortcut._modules.get('conv') is not None:
+            convShortcut = b.shortcut._modules.get('conv')
+            n = convShortcut.kernel_size[0] * convShortcut.kernel_size[1] * convShortcut.out_channels
+            convShortcut.weight.data.normal_(0, math.sqrt(2. / n))
+    if isinstance(module, Conv2dPrune):
         pass
-    if isinstance(module, nn.Conv2d):
-
-        nn.init.kaiming_normal_(module.weight.data, mode='fan_in', nonlinearity="relu")
-        nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
+        # nn.init.kaiming_normal_(module.weight.data, mode='fan_in', nonlinearity="relu")
+        # nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
     elif isinstance(module, nn.BatchNorm2d):
         module.weight.data.fill_(1)
         module.bias.data.zero_()
@@ -132,6 +148,32 @@ def initialize_weights_fixup(module):
 
 
 first_RUN = True
+
+prune_threshold = 100
+
+
+def apply_prune_per_threshold(module):
+    if isinstance(module, Conv2dPrune):
+        module.update_prune_by_threshold(prune_threshold)
+
+
+prune_percentage = 0.8
+
+
+def apply_prune_percentage(module):
+    if isinstance(module, Conv2dPrune):
+        module.update_prune_by_percentage(prune_percentage)
+
+
+total_params = 0
+total_pruned_params = 0
+
+
+def apply_sum_prunes(module):
+    global total_params, total_pruned_params
+    if isinstance(module, Conv2dPrune):
+        total_params += module.prune_mask.numel()
+        total_pruned_params += (module.prune_mask == 0).sum().item()
 
 
 def calc_padding(kernal):
@@ -149,7 +191,7 @@ class BasicBlock(nn.Module):
         global layer_index_total
         self.layer_index = layer_index_total
         layer_index_total = layer_index_total + 1
-        self.conv1 = DecompCONV(
+        self.conv1 = Conv2dPrune(
             in_channels,
             out_channels,
             kernel_size=k1,
@@ -157,7 +199,7 @@ class BasicBlock(nn.Module):
             padding=calc_padding(k1),
             bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = DecompCONV(
+        self.conv2 = Conv2dPrune(
             out_channels,
             out_channels,
             kernel_size=k2,
@@ -170,7 +212,7 @@ class BasicBlock(nn.Module):
         if in_channels != out_channels:
             self.shortcut.add_module(
                 'conv',
-                DecompCONV(
+                Conv2dPrune(
                     in_channels,
                     out_channels,
                     kernel_size=1,
@@ -187,14 +229,14 @@ class BasicBlock(nn.Module):
         return y
 
 
+
+
 class Network(nn.Module):
     def __init__(self, config):
         super(Network, self).__init__()
-        global COMP_FACTOR
+        print("Init frequency-Damped pruned CP-ResNet...")
         input_shape = config['input_shape']
         n_classes = config['n_classes']
-        COMP_FACTOR = config.get("decomp_factor", 4) or 4
-        print("\nDecomposed Conv2d with decomp_factor of ",COMP_FACTOR,"\n\n")
 
         base_channels = config['base_channels']
         block_type = config['block_type']
@@ -234,7 +276,7 @@ class Network(nn.Module):
         if config.get("grow_a_lot"):
             n_channels[2] = base_channels * 8 * block.expansion
 
-        self.in_c = nn.Sequential(nn.Conv2d(
+        self.in_c = nn.Sequential(Conv2dPrune(
             input_shape[1],
             n_channels[0],
             kernel_size=5,
@@ -273,7 +315,7 @@ class Network(nn.Module):
             else:
                 ff_list.append(AttentionAvg(n_channels[2], n_classes, sum_all=False))
         else:
-            ff_list += [nn.Conv2d(
+            ff_list += [Conv2dPrune(
                 n_channels[2],
                 n_classes,
                 kernel_size=1,
@@ -302,7 +344,7 @@ class Network(nn.Module):
         # initialize weights
         if config.get("weight_init") == "fixup":
             self.apply(initialize_weights)
-            if isinstance(self.feed_forward[0], nn.Conv2d):
+            if isinstance(self.feed_forward[0], Conv2dPrune):
                 self.feed_forward[0].weight.data.zero_()
             self.apply(initialize_weights_fixup)
         else:
@@ -330,6 +372,34 @@ class Network(nn.Module):
                                      , nn.MaxPool2d(2, 2, padding=self.pooling_padding))
         return stage
 
+    def update_prune_weights(self, percentage, mode):
+        global prune_percentage, prune_threshold, total_params, total_pruned_params
+        if mode == "layer":
+            prune_percentage = percentage
+            self.apply(apply_prune_percentage)
+        elif mode == "all":
+            all_params = []
+            for p in self.parameters():
+                if len(p.size()) != 1:
+                    all_params.append(p.abs().view(-1).cpu())
+            all_params = torch.cat(all_params).view(-1)
+            k = 1 + round(float(percentage) * (all_params.numel() - 1))
+            threshold = all_params.kthvalue(k).values.item()
+            prune_threshold = threshold
+            self.apply(apply_prune_per_threshold)
+        else:
+            raise RuntimeError("not implemented mode")
+        total_params = 0
+        total_pruned_params = 0
+        self.apply(apply_sum_prunes)
+        print(mode, ":  params ", total_params, " pruned ", total_pruned_params, " remaining ",
+              total_params - total_pruned_params)
+        return total_params - total_pruned_params
+
+    def set_prune_flag(self, flag):
+        global apply_prune
+        apply_prune = flag
+
     def _forward_conv(self, x):
         global first_RUN
 
@@ -349,6 +419,43 @@ class Network(nn.Module):
         x = self.stage3(x)
         if first_RUN: print("stage3:", x.size())
         return x
+
+    def get_num_true_params(self):
+        sum_params = 0
+        sum_non_zero = 0
+        desc = ""
+
+        def calc_params(model):
+            nonlocal desc, sum_params, sum_non_zero
+            skip = "count"
+            # if "batchnorm" in type(model).__name__.lower():
+            #     skip = "skip"
+            for k, p in model.named_parameters(recurse=False):
+                if p.requires_grad:
+                    nonzero = p[p != 0].numel()
+                    total = p.numel()
+                    desc += f"type {type(model).__name__}, {k},  {total}, {nonzero}, {p.dtype}, {skip} " + "\n"
+                    if skip != "skip":
+                        sum_params += total
+                        sum_non_zero += nonzero
+
+        self.apply(calc_params)
+        return sum_params
+
+    def get_num_prunable_params(self):
+        sum_params = 0
+        sum_non_zero = 0
+        desc = ""
+        print("get_num_prunable_params")
+
+        def calc_params(model):
+            nonlocal desc, sum_params, sum_non_zero
+
+            if "Conv2dPrune".lower() in type(model).__name__.lower():
+                sum_params += model.weight.numel()
+
+        self.apply(calc_params)
+        return sum_params
 
     def forward(self, x):
         global first_RUN
@@ -372,6 +479,8 @@ class Network(nn.Module):
             logit = torch.softmax(logit, 1)
         first_RUN = False
         return logit
+
+
 
 
 def get_model_based_on_rho(rho, arch, config_only=False, model_config_overrides={}):

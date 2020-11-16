@@ -16,7 +16,8 @@ from tensorboardX import SummaryWriter
 
 from datasets import DatasetsManager
 logger = shared_globals.logger
-from utils_funcs import count_parameters,count_non_zero_params
+from utils_funcs import count_parameters,count_non_zero_params, linear_rampup, customsigmoid_rampup
+
 
 class Trainer:
     # Events
@@ -33,6 +34,7 @@ class Trainer:
         self.datasets = {}
         self.data_loaders = {}
         self.use_swa = config.use_swa
+        self.prune_mode = config.get("prune_mode")
         #self.run.info['epoch'] = 0
         # set random seed
         torch.manual_seed(seed)
@@ -93,6 +95,35 @@ class Trainer:
         # move to gpu
         if self.config.use_gpu:
             self.bare_model.cuda()
+
+        if self.prune_mode:
+            try:
+                true_params = self.bare_model.get_num_true_params()
+                prunable_params = self.bare_model.get_num_prunable_params()
+                shared_globals.console.info("True model parameters {}, Prunable params {} ".format(
+                    true_params, prunable_params))
+            except AttributeError:
+                raise
+                true_params = prunable_params = count_parameters(self.bare_model)
+                shared_globals.console.info(
+                    "WARNING:\n\nmodel doens't support true/prunable: True {}, Prunable params {} \n\n".format(
+                        true_params, prunable_params))
+            if self.config.prune_percentage == -1:  # -1 means auto
+                must_prune_params = true_params - self.config.prune_percentage_target_params
+                self.real_prune_percentage = must_prune_params / prunable_params
+                if self.real_prune_percentage >= 0.9999:
+                    raise RuntimeError("real_prune_percentage {} >= ~ 1.".format(self.real_prune_percentage))
+                if self.real_prune_percentage >= 0.9:
+                    print("\n\nWarning: very high real_prune_percentage\n\n", self.real_prune_percentage)
+                if self.real_prune_percentage < 0:
+                    raise RuntimeError("real_prune_percentage {} <0.".format(self.real_prune_percentage))
+                    print("\nWARNING: real_prune_percentage<0: ", self.real_prune_percentage, " setting to 0.1\n")
+                    self.real_prune_percentage = 0.1
+            else:
+                self.real_prune_percentage = self.config.prune_percentage
+            print("current prunning percentage=", self.real_prune_percentage)
+            
+
 
         shared_globals.console.info("\n\nTrainable model parameters {}, non-trainable {} \n\n".format(
             count_parameters(self.bare_model), count_parameters(self.bare_model, False)))
@@ -205,6 +236,20 @@ class Trainer:
         try:
             for epoch in range(start_epoch, epochs):
                 # Training
+                if self.prune_mode:
+                    self.model.set_prune_flag(True)
+                    ramp_up_function = None
+                    if self.config.adaptive_prune_rampup_mode == "linear":
+                        ramp_up_function = linear_rampup
+                    if self.config.adaptive_prune_rampup_mode == "exponential":
+                        ramp_up_function = customsigmoid_rampup
+                    remaining_params = self.model.update_prune_weights(self.real_prune_percentage *
+                                                                       ramp_up_function(epoch,
+                                                                                        self.config.adaptive_prune_rampup_len),
+                                                                       self.config.prune_mode)
+                    self.writer.add_scalar("remaining_params", remaining_params, epoch)
+                    print("remaining_params (epoch %d): %d" % (epoch, remaining_params))
+
                 for name in self.config.datasets:
                     dataset_config = AttrDefault(lambda: None, self.config.datasets[name])
                     if dataset_config.training:
@@ -254,6 +299,26 @@ class Trainer:
         except KeyboardInterrupt:
             pass
         shared_globals.console.info("last test:\n" + str(self.state['metrics']))
+        if self.prune_mode:
+            shared_globals.console.info("trained model parameters non-zero (before update_prune) {} ".format(
+                count_non_zero_params(self.bare_model)))
+            self.prepare_prune()
+            shared_globals.console.info("trained model parameters non-zero: {} ".format(
+                count_non_zero_params(self.bare_model)))
+
+    def prepare_prune(self):
+        def copy_prune_to_weight(module):
+            if type(module).__name__ == "Conv2dPrune":
+                module.copy_prune_to_weight()
+
+        def zero_prune(module):
+            with torch.no_grad():
+                if type(module).__name__ == "Conv2dPrune":
+                    # print(module.prune_mask.shape)
+                    module.prune_mask.fill_(0)
+        with torch.no_grad():
+            self.bare_model.apply(copy_prune_to_weight)
+            self.bare_model.apply(zero_prune)
 
     def train(self, epoch, dataset_name, dataset_config, model=None):
         logger.info('Train ({})  epoch {}:'.format(dataset_name, epoch))
@@ -449,7 +514,7 @@ class Trainer:
             else:
                 lr = optim_config['base_lr']
             writer.add_scalar(dataset_name + '/LearningRate', lr, epoch)
-            #self.run.log_scalar("LearningRate", lr, epoch)
+            
 
     def test(self, epoch, dataset_name, dataset_config, model=None, extra_name=""):
         logger.info('Testing on ({}) epoch {}:'.format(dataset_name + extra_name, epoch))
@@ -549,16 +614,12 @@ class Trainer:
                     loss_meter.avg,
                     accuracy_meter.val,
                     accuracy_meter.avg), end="\r")
-        print('\x1b[2K', 'Test[{}]{}:Step {}/{} '
-                         'Loss {:.4f} ({:.4f}) '
-                         'Accuracy {:.4f} ({:.4f})'.format(
-            epoch, dataset_name,
-            step + 1,
-            len(test_loader),
-            loss_meter.val,
+        print('\x1b[2K', 'Test[{}]{}: '
+                         'Loss {:.4f} '
+                         'Accuracy {:.4f} '.format(
+            epoch+1, dataset_name,            
             loss_meter.avg,
-            accuracy_meter.val,
-            accuracy_meter.avg), end="\r")
+            accuracy), end="\n")
 
         elapsed = time.time() - start
         logger.info('Elapsed {:.2f}'.format(elapsed))

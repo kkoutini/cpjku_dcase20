@@ -9,7 +9,7 @@ import shared_globals
 from librosa.filters import mel as librosa_mel_fn
 
 import numpy as np
-
+from utils_funcs import update_dict
 
 def initialize_weights(module):
     if isinstance(module, nn.Conv2d):
@@ -292,11 +292,11 @@ class Network(nn.Module):
 
 
 
-def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
+def get_model_based_on_rho(rho, arch, config_only=False, model_config_overrides={}):
     # extra receptive checking
     extra_kernal_rf = rho - 7
     model_config = {
-        "arch": "cp_faresnet",
+        "arch": arch,
         "base_channels": 128,
         "block_type": "basic",
         "depth": 26,
@@ -340,6 +340,8 @@ def get_model_based_on_rho(rho, arch, config_only=False, **kwargs):
         "use_bn": True,
         "weight_init": "fixup"
     }
+    # override model_config 
+    model_config=update_dict(model_config, model_config_overrides)
     if config_only:
         return model_config
     return Network(model_config)

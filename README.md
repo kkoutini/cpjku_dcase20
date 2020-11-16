@@ -65,12 +65,18 @@ After installing dependencies:
      ```
  The exact commmand is printed when you run the experiment script.
 
+
 ## Example runs
 ### CP_ResNet (DCASE 2020 DCASE 1b)
 default adapted receptive field RN1,RN1 (in Koutini2019Receptive below):
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py 
 ```
+For a list of args:
+```
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --help
+```
+
 Large receptive Field
 ```
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 15
@@ -96,6 +102,20 @@ CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_resnet_freq_damp  --rh
 
 ```
 
+Using  smaller width :
+```
+CUDA_VISIBLE_DEVICES=0 python3 exp_cp_resnet.py  --width 64   --rho 5
+```
+and removing some of the tailing layers :
+```
+CUDA_VISIBLE_DEVICES=0  python3 exp_cp_resnet.py  --width 64 --depth_restriction "0,0,3"  --rho 5
+```
+and pruning 90% of the parameters :
+```
+CUDA_VISIBLE_DEVICES=0 python3 exp_cp_resnet.py --arch  cp_resnet_prune  --rho 5  --width 64 --depth_restriction "0,0,3" --prune --prune_ratio=0.9
+```
+
+
 
 # Loading pretrained models
 (DCASE20 models will be added soon)
@@ -112,7 +132,7 @@ $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 5 --load=path_to_model.p
 In case that you want to predict on a different dataset, you should add the dataset to the config file.
 For example look at the `eval` dataset in  `configs/cp_resnet_eval.json`.
 # Missing Features
-This repo is used to publish for our submission to DCASE 2019 and MediaEval 2019. If some feauture/architecture/dataset missing feel free to contact the authors or to open an issue.
+This repo is used to publish for our submission to DCASE 2019, 2020 and MediaEval 2019. If some feauture/architecture/dataset missing feel free to contact the authors or to open an issue.
 
 # Citation
 
