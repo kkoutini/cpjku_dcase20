@@ -64,7 +64,10 @@ parser.add_argument('--prune_ratio', default=-1, type=float,
                     if set to `-1` then the percentage will be calculate based on the arg `prune_target_params`.')
 parser.add_argument('--prune_target_params', default=-1, type=int, 
                     help='The number of parameters to remain after pruning. `prune_ratio` have to be `-1` otherwise this argument will be ignored.')
-
+parser.add_argument('--prune_method', default="all", type=str, 
+                    choices=["all","layer"],
+                    help='Indicates wether to select the parameters to be pruned per layer or globally from all the network parameters. \
+                    Pruning per layer is more robust agaisnt layers collapsing.')
 
 
 # Optimization options
@@ -113,10 +116,13 @@ arch = importlib.import_module('models.{}'.format(args.arch))
 
 ## parsing model config updates
 model_config_overrides = {"base_channels": args.width, "n_blocks_per_stage": [4-int(b) for b in args.depth_restriction.split(",")],
-                          "decomp_factor": args.decomp_factor}
+                          "decomp_factor": args.decomp_factor,
+                          "n_classes":  default_conf['audiodataset']['num_of_classes'], # corrent the number of classes from the dataset config
+                          }
+
 # pruning mode
 if args.prunning_mode:
-    default_conf['prune_mode']="layer" # or "all" either remove a percentage of the parameters of each layer or from all the params.
+    default_conf['prune_mode']= args.prune_method
     default_conf['adaptive_prune_rampup_mode']=args.prune_rampup
     default_conf['adaptive_prune_rampup_len']=args.prune_rampup_len
     default_conf['prune_percentage']=args.prune_ratio
@@ -128,6 +134,11 @@ if args.prunning_mode:
 
 # get the final architecture config
 default_conf['model_config'] = arch.get_model_based_on_rho(args.rho, args.arch, config_only=True, model_config_overrides=model_config_overrides)
+
+
+
+
+
 
 
 # find the RF at the 24th layer of the model defined by this config

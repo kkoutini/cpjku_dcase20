@@ -164,12 +164,22 @@ class Network(nn.Module):
         self.stage1 = self._make_stage(
             n_channels[0], n_channels[0], n_blocks_per_stage[0], block, stride=1, maxpool=config['stage1']['maxpool'],
             k1s=config['stage1']['k1s'], k2s=config['stage1']['k2s'])
-        self.stage2 = self._make_stage(
-            n_channels[0], n_channels[1], n_blocks_per_stage[1], block, stride=1, maxpool=config['stage2']['maxpool'],
-            k1s=config['stage2']['k1s'], k2s=config['stage2']['k2s'])
-        self.stage3 = self._make_stage(
-            n_channels[1], n_channels[2], n_blocks_per_stage[2], block, stride=1, maxpool=config['stage3']['maxpool'],
-            k1s=config['stage3']['k1s'], k2s=config['stage3']['k2s'])
+        if n_blocks_per_stage[1] == 0:
+            self.stage2 = nn.Sequential()
+            n_channels[1] = n_channels[0]
+            print("WARNING: stage2 removed")
+        else:
+            self.stage2 = self._make_stage(
+                n_channels[0], n_channels[1], n_blocks_per_stage[1], block, stride=1, maxpool=config['stage2']['maxpool'],
+                k1s=config['stage2']['k1s'], k2s=config['stage2']['k2s'])
+        if n_blocks_per_stage[2] == 0:
+            self.stage3 = nn.Sequential()
+            n_channels[2] = n_channels[1]
+            print("WARNING: stage3 removed")
+        else:
+            self.stage3 = self._make_stage(
+                n_channels[1], n_channels[2], n_blocks_per_stage[2], block, stride=1, maxpool=config['stage3']['maxpool'],
+                k1s=config['stage3']['k1s'], k2s=config['stage3']['k2s'])
 
         ff_list = []
 

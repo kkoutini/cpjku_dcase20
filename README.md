@@ -67,23 +67,22 @@ After installing dependencies:
 
 
 ## Example runs
-### CP_ResNet (DCASE 2020 DCASE 1b)
 default adapted receptive field RN1,RN1 (in Koutini2019Receptive below):
-```
+```bash 
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py 
 ```
 For a list of args:
-```
+```bash 
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --help
 ```
 
 Large receptive Field
-```
+```bash 
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 15
 ```
 very small max receptive Field:
 
-```
+```bash 
 $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 2
 ```
 ### Using differnet architectures
@@ -92,28 +91,85 @@ The argument ```--arch``` allows changing the CNN architecture, the possible arc
 
 For example [Frequency aware CP_ResNet](https://arxiv.org/abs/1909.02859) : 
 
-```
+```bash
 CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_faresnet  --rho 5
 
 ```
 [Frequency-Damped](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf) CP_ResNet:
-```
+```bash
 CUDA_VISIBLE_DEVICES=0  python exp_cp_resnet.py --arch cp_resnet_freq_damp  --rho 7
 
 ```
 
 Using  smaller width :
-```
+```bash
 CUDA_VISIBLE_DEVICES=0 python3 exp_cp_resnet.py  --width 64   --rho 5
 ```
 and removing some of the tailing layers :
-```
+```bash
 CUDA_VISIBLE_DEVICES=0  python3 exp_cp_resnet.py  --width 64 --depth_restriction "0,0,3"  --rho 5
 ```
 and pruning 90% of the parameters :
-```
+```bash
 CUDA_VISIBLE_DEVICES=0 python3 exp_cp_resnet.py --arch  cp_resnet_prune  --rho 5  --width 64 --depth_restriction "0,0,3" --prune --prune_ratio=0.9
 ```
+
+### CP_ResNet Submissions to DCASE 2020 Task 1b
+
+Submission 1: Decomposed CP-ResNet(rho=3) with 95.83 accuracy on the development set (94.7 on the unseen evaluation set) 18740 trainable parameters (34.21875 KB in float16)
+
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --arch cp_resnet_decomp --rho 3  --width 48 --depth_restriction "0,4,4" 
+```
+
+Submission 2: Pruned Frequency-Damped CP-ResNet (rho=4) with 97.3 accuracy on the development set (96.5 on the unseen evaluation set) 250000 trainable parameters (500 KB in float16)
+
+```bash 
+$ CUDA_VISIBLE_DEVICES=1 python exp_cp_resnet.py --arch cp_resnet_df_prune --rho 4  --width 64 --depth_restriction "0,2,4" --prune --prune_method=all  --prune_target_params 250000
+```
+
+Submission 3:  Frequency-Damped CP-ResNet (width and depth restriction) (rho=4) with 97.3 accuracy on the development set (96.5 on the unseen evaluation set) 247316 trainable parameters (500 KB in float16)
+
+```bash 
+$ CUDA_VISIBLE_DEVICES=2 python exp_cp_resnet.py --arch cp_resnet_freq_damp --rho 4  --width 48 --depth_restriction "0,1,3"
+```
+
+
+### Reproducing Results from the [paper](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf) with DCASE 18 Dataset
+
+The plots uses different values of rho, in the examples we set rho=0.
+
+![Plot](figures/damp_desk.png)
+Baseline CP-ResNet:
+
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet  --depth_restriction "0,1,4" --rho 0 
+```
+CP-ResNet with Frequency-Damped layers:
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet_freq_damp  --depth_restriction "0,1,4" --rho 0 
+```
+
+CP-ResNet Decomposed with decomposition factor of 4 (--decomp_factor 4):
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet_decomp   --depth_restriction "0,1,4" --rho 0 --decomp_factor 4
+```
+
+Frequency-Damped  CP-ResNet Decomposed  with decomposition factor of 4  (--decomp_factor 4)  :
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet_decomp_freq_damp   --depth_restriction "0,1,4" --rho 0 --decomp_factor 4
+```
+
+CP-ResNet pruned to a target number of  parameters of 500k (--prune_target_params 500000):
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet_prune   --depth_restriction "0,1,4" --rho 0  --prune   --prune_target_params 500000
+```
+
+Frequency-Damped CP-ResNet pruned  to a target number of  parameters of 500k (--decomp_factor 4):
+```bash 
+$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch cp_resnet_df_prune   --depth_restriction "0,1,4" --rho 0  --prune   --prune_target_params 500000
+```
+
 
 
 
