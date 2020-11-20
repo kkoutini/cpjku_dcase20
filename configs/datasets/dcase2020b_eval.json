@@ -1,0 +1,51 @@
+{
+    "audiodataset": {
+        "leaderboard_parser": "nolabel_csv",
+        "file_cache": true,
+        "subsample": false,
+        "cv_version": null,
+        "cache": true,
+        "parser": "categorical_csv",
+        "resize_limit": 26,
+        "name": "d20t1b",
+        "use_as_default_scaler": false,
+        "sub_parser": "nolabel_csv",
+        "roll": 1,
+        "parser_args": {
+            "csv_file": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/meta.csv",
+            "labels_col": 1,
+            "header": 0,
+            "files_col": 0
+        },
+        "normalize": 1,
+        "sub_audio_path": "datasets/TAU-urban-acoustic-scenes-2020-3class-evaluation/",
+        "leaderboard_audio_path": "datasets/TAU-urban-acoustic-scenes-2019-leaderboard/",
+        "resize_limit_t": 26,
+        "vertical_desync": false,
+        "leaderboard_parser_args": {
+            "csv_file": "datasets/evaluation_setup/test.csv",
+            "header": 0,
+            "files_col": 0
+        },
+        "num_of_classes": 3,
+        "audio_path": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/",
+        "stereo_flip": false,
+        "sub_parser_args": {
+            "csv_file": "datasets/TAU-urban-acoustic-scenes-2020-3class-evaluation/evaluation_setup/fold1_test.csv",
+            "header": 0,
+            "files_col": 0
+        },
+        "audio_processor": "d18_stereo",
+        "fold": 1,
+        "dcace_version": null,
+        "test_files_csv": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/evaluation_setup/fold{}_evaluate.csv",
+        "stereo_desync": false,
+        "use_raw_spectograms": false,
+        "spec_resize": false,
+        "cache_x_name": "",
+        "no_resample": false,
+        "train_files_csv": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/meta.csv",
+        "scale": false
+    }
+}
+

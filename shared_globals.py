@@ -19,7 +19,7 @@ state = None
 config = None
 
 logger = logging.getLogger("")
-console = None
+console = logger
 
 global_step = 0
 

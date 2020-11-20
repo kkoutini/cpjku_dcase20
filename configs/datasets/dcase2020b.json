@@ -12,7 +12,7 @@
       "cache_x_name": "",
       "audio_path": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/",
       "leaderboard_parser": "nolabel_csv",
-      "sub_audio_path": "datasets/sub/TAU-urban-acoustic-scenes-2019-evaluation/",
+      "sub_audio_path": "datasets/TAU-urban-acoustic-scenes-2020-3class-evaluation/",
       "audio_processor": "d18_stereo",
       "parser": "categorical_csv",
       "resize_limit": 26,
@@ -31,7 +31,7 @@
       "sub_parser_args": {
           "files_col": 0,
           "header": 0,
-          "csv_file": "datasets/sub/TAU-urban-acoustic-scenes-2019-evaluation/evaluation_setup/test.csv"
+          "csv_file": "datasets/TAU-urban-acoustic-scenes-2020-3class-evaluation/evaluation_setup/fold1_test.csv"
       },
       "cv_version": null,
       "test_files_csv": "datasets/TAU-urban-acoustic-scenes-2020-3class-development/evaluation_setup/fold{}_evaluate.csv",
