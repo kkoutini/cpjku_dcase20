@@ -174,19 +174,18 @@ $ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py --dataset dcase2018.json --arch
 
 
 # Loading pretrained models
-(DCASE20 models will be added soon)
 Download the evaluation set:
 ```bash
-$ python download_dataset.py --version 2019eval
+$ python download_dataset.py --version 2020b_eval
 ```
-Download the trained models (from [zando](  https://zenodo.org/record/3674034))
 
-Run the experiment with the `load` the correct `rho` value, because the `rho` value changes the network weights shape) 
-```bash
-$ CUDA_VISIBLE_DEVICES=0 python exp_cp_resnet.py  --rho 5 --load=path_to_model.pth
-```
+Download the trained models  [DCASE 2020](https://zenodo.org/record/4282667) ( [DCASE 2019](  https://zenodo.org/record/3674034)) and extract the models directories into the "pretrained_models" directory.
+
+Check the [eval_pretrained.ipynb](/eval_pretrained.ipynb) notebook.
+
 In case that you want to predict on a different dataset, you should add the dataset to the config file.
-For example look at the `eval` dataset in  `configs/cp_resnet_eval.json`.
+For example look at the `dcase20 eval` dataset in  [configs/datasets/dcase2020b_eval.json](configs/datasets/dcase2020b_eval.json).
+
 # Missing Features
 This repo is used to publish for our submission to DCASE 2019, 2020 and MediaEval 2019. If some feauture/architecture/dataset missing feel free to contact the authors or to open an issue.
 
