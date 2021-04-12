@@ -52,7 +52,7 @@ class Trainer:
         if not os.path.exists(models_outputdir):
             os.makedirs(models_outputdir)
         #self.run.info['out_path'] = config.out_dir
-
+        self.colab_mode = False
 
         # init_loggers
         self.init_loggers()
@@ -448,7 +448,7 @@ class Trainer:
                                   shared_globals.global_step)
                 writer.add_scalars(dataset_name + "/RunningMetrics", eval_metrics,
                                    shared_globals.global_step)
-            if step % (number_of_steps // 10) == 0:
+            if (not self.colab_mode) and ( step % (number_of_steps // 10) == 0):
                 print('\x1b[2K ' + 'Epoch {} Step {}/{} '
                                    'Loss {:.4f} ({:.4f}) '
                                    'Accuracy {:.4f} ({:.4f}) '.format(
@@ -459,6 +459,18 @@ class Trainer:
                     loss_meter.avg,
                     accuracy_meter.val,
                     accuracy_meter.avg), end="\r")
+
+            if self.colab_mode:
+                print('\r \x1b[2K ' + 'Epoch {} Step {}/{} '
+                                   'Loss {:.4f} ({:.4f}) '
+                                   'Accuracy {:.4f} ({:.4f}) '.format(
+                    epoch,
+                    step + 1,
+                    number_of_steps,
+                    loss_meter.val,
+                    loss_meter.avg,
+                    accuracy_meter.val,
+                    accuracy_meter.avg), end="")
             if step % 100 == 0:
                 logger.info('Epoch {} Step {}/{} '
                             'Loss {:.4f} ({:.4f}) '
@@ -477,6 +489,8 @@ class Trainer:
                 break
 
         elapsed = time.time() - start
+        if epoch<10:
+            print('Epoch {} Time Elapsed {:.2f} (loading: {:.2f} )'.format(epoch, elapsed, total_loading_time))
         logger.info('Elapsed {:.2f} (loading: {:.2f} )'.format(elapsed, total_loading_time))
         logger.info('avg metrics:  {}'.format(str(metrics_meter.avg)))
         print('\x1b[2K' + 'Train[{}]{}:Step {}/{} '
@@ -603,7 +617,18 @@ class Trainer:
             correct_meter.update(correct_, 1)
             accuracy = correct_meter.sum / total_num
             accuracy_meter.update(accuracy, num)
-            if step % ((len(test_loader) + 10) // 10) == 0:
+            if self.colab_mode:
+                print('\r\x1b[2K', 'Test[{}]{}: Step {}/{} '
+                                 'Loss {:.4f} ({:.4f}) '
+                                 'Accuracy {:.4f} ({:.4f})'.format(
+                    epoch, dataset_name,
+                    step + 1,
+                    len(test_loader),
+                    loss_meter.val,
+                    loss_meter.avg,
+                    accuracy_meter.val,
+                    accuracy_meter.avg), end="")
+            elif step % ((len(test_loader) + 10) // 10) == 0:
                 print('\x1b[2K', 'Test[{}]{}: Step {}/{} '
                                  'Loss {:.4f} ({:.4f}) '
                                  'Accuracy {:.4f} ({:.4f})'.format(
@@ -864,7 +889,13 @@ class Trainer:
                 outputs = model(data).cpu()
             acc_sids += sids
             acc_out.append(outputs)
-            if step % (len(test_loader) // 10) == 0:
+            if self.colab_mode:
+                print('\r \x1b[2K', 'Predicting  Step {}/{} '.format(
+
+                    step + 1,
+                    len(test_loader),
+                ), end="")
+            elif step % (len(test_loader) // 10) == 0:
                 print('\x1b[2K', 'Predicting  Step {}/{} '.format(
 
                     step + 1,
