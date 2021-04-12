@@ -5,7 +5,7 @@ import random
 import time
 import torch
 import numpy as np
-from dcase_util.utils import logging
+import logging
 from torch.utils.data import RandomSampler, BatchSampler, SequentialSampler
 
 import shared_globals
