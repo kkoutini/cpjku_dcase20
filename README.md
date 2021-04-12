@@ -1,5 +1,7 @@
 # CP JKU Submission for DCASE 2020
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kkoutini/cpjku_dcase20/blob/master/cpjku_dcase20_colab.ipynb)
+
 Technical report [DCASE](http://dcase.community/documents/challenge2020/technical_reports/DCASE2020_Koutini_142.pdf). 
 Workshop paper with more analysis of the parameter reduction methods [DCASE](http://dcase.community/documents/workshop2020/proceedings/DCASE2020Workshop_Koutini_91.pdf).
 This Repo code is based on [CP JKU Submission for DCASE 2019](https://github.com/kkoutini/cpjku_dcase19). 
@@ -7,6 +9,11 @@ The architectures are based on Receptive-Field-Regularized CNNs  [The Receptive 
 
 Feel free to raise an issue or contact the authors in case of an issue.
 
+## Colab notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kkoutini/cpjku_dcase20/blob/master/cpjku_dcase20_colab.ipynb)
+
+`cpjku_dcase20_colab.ipynb` contains the required code to run feature extraction and training on google colab.
 
 ## Requirements
 
