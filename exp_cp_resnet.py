@@ -26,6 +26,10 @@ parser.add_argument('--arch', default="cp_resnet", type=str,
                     choices=available_models,
                     help='The CNN architecture, one from the files located in `models/`')
 
+parser.add_argument('--mixed_precision_training', default=0, type=int,
+                    help='use mixed_precision_training (torch>1.5). 0 disabled, 1 using optimization o1, 2 using optimization o2')
+
+
 # rho value control the MAX RF of the Network values from 5-9 corresponds max rf similar to the popular VGG-like CNNs.
 parser.add_argument('--rho', default=5, type=int,
                     help='rho value as explained in DCASE2019 workshop paper '
@@ -163,7 +167,9 @@ else:
     default_conf['use_mixup'] = False
 
 epochs = args.epochs
-trainer = Trainer(default_conf)
+trainer = Trainer(default_conf, mixed_precision_training=args.mixed_precision_training)
+
+
 if args.load is not None:
     model_path = args.load
     print("will load pre-trained model from ", model_path)

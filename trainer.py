@@ -18,14 +18,19 @@ from datasets import DatasetsManager
 logger = shared_globals.logger
 from utils_funcs import count_parameters,count_non_zero_params, linear_rampup, customsigmoid_rampup
 
-
+class dummy_context_mgr():
+    def __enter__(self):
+        return None
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+    
 class Trainer:
     # Events
     eventAfterEpoch = Event()
     eventAfterTrainingDataset = Event()
     eventAfterTestingDataset = Event()
 
-    def __init__(self, config, seed=42):
+    def __init__(self, config, seed=42,mixed_precision_training = False):
         global logger
         logger = shared_globals.logger
         config = AttrDefault(lambda: None, config)
@@ -53,6 +58,10 @@ class Trainer:
             os.makedirs(models_outputdir)
         #self.run.info['out_path'] = config.out_dir
         self.colab_mode = False
+        self.mixed_precision_training = mixed_precision_training
+        if mixed_precision_training:
+            print("\n\nUsing mixed_precision_training\n\n ")
+            self.scaler = torch.cuda.amp.GradScaler()
 
         # init_loggers
         self.init_loggers()
@@ -385,20 +394,24 @@ class Trainer:
                     self.writer.add_graph(self.bare_model, data[0:1])
             optimizer.zero_grad()
 
-            outputs = model(data)
+            with torch.cuda.amp.autocast()  if self.mixed_precision_training else dummy_context_mgr() as gs:
+                outputs = model(data)
 
-            if self.config.use_mixup and epoch >= int(self.config.use_mixup) - 1:
-                loss = self.criterion(outputs, targets, targets[rn_indices], lam, self.config.get("mixup_mode"))
+                if self.config.use_mixup and epoch >= int(self.config.use_mixup) - 1:
+                    loss = self.criterion(outputs, targets, targets[rn_indices], lam, self.config.get("mixup_mode"))
+                else:
+                    # print("targets", targets)
+                    if model_config.binary_classifier:
+                        targets = targets.float()  # https://discuss.pytorch.org/t/data-type-mismatch-in-loss-function/34860
+                        # print("targets.float()", targets)
+                    loss = self.criterion(outputs, targets)
+            if self.mixed_precision_training:
+                self.scaler.scale(loss).backward()
+                self.scaler.step(optimizer)
+                self.scaler.update()
             else:
-                # print("targets", targets)
-                if model_config.binary_classifier:
-                    targets = targets.float()  # https://discuss.pytorch.org/t/data-type-mismatch-in-loss-function/34860
-                    # print("targets.float()", targets)
-                loss = self.criterion(outputs, targets)
-
-            loss.backward()
-
-            optimizer.step()
+                loss.backward()
+                optimizer.step()
 
             if model_config['multi_label']:
                 preds = (outputs > model_config['prediction_threshold']).float()
@@ -460,7 +473,7 @@ class Trainer:
                     accuracy_meter.val,
                     accuracy_meter.avg), end="\r")
 
-            if self.colab_mode:
+            if self.colab_mode and step % 10 == 0 :
                 print('\r \x1b[2K ' + 'Epoch {} Step {}/{} '
                                    'Loss {:.4f} ({:.4f}) '
                                    'Accuracy {:.4f} ({:.4f}) '.format(
@@ -564,13 +577,14 @@ class Trainer:
                 data = data.cuda()
                 targets = targets.cuda()
 
-            with torch.no_grad():
-                outputs = model(data)
+            with torch.cuda.amp.autocast()  if self.mixed_precision_training else dummy_context_mgr() as gs:
+                with torch.no_grad():
+                    outputs = model(data)
 
-            if model_config.binary_classifier:
-                targets = targets.float()  # https://discuss.pytorch.org/t/data-type-mismatch-in-loss-function/34860
+                if model_config.binary_classifier:
+                    targets = targets.float()  # https://discuss.pytorch.org/t/data-type-mismatch-in-loss-function/34860
 
-            loss = self.criterion(outputs, targets)
+                loss = self.criterion(outputs, targets)
 
             # if data_config['use_mixup']:
             #     _, targets = targets.max(dim=1)
@@ -617,7 +631,7 @@ class Trainer:
             correct_meter.update(correct_, 1)
             accuracy = correct_meter.sum / total_num
             accuracy_meter.update(accuracy, num)
-            if self.colab_mode:
+            if self.colab_mode  and step % 10 :
                 print('\r\x1b[2K', 'Test[{}]{}: Step {}/{} '
                                  'Loss {:.4f} ({:.4f}) '
                                  'Accuracy {:.4f} ({:.4f})'.format(
