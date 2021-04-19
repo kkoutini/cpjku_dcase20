@@ -13,7 +13,7 @@ Feel free to raise an issue or contact the authors in case of an issue.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kkoutini/cpjku_dcase20/blob/master/cpjku_dcase20_colab.ipynb)
 
-`cpjku_dcase20_colab.ipynb` contains the required code to run feature extraction and training on google colab. It also contains a low-complexity baseline (120kb) for DCASE 21 task 1.a with `0.623` accuracy.
+`cpjku_dcase20_colab.ipynb` contains the required code to run feature extraction and training on google colab. It also contains a low-complexity baseline (65K non-zero parameters) for DCASE 21 task 1.a with `0.623` accuracy.
 
 ## Requirements
 
